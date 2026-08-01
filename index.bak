@@ -151,13 +151,11 @@
         let currentFileName = "";
         let userNavigatedDirection = 1; 
         let patternStartTime = 0; 
-        
-        let exactPositionTrace = [];
-        let loopLocked = false;          
-        let lockedBlockSize = 0;         
-        let loopCycleCounter = 0;        
+        let playbackWatchdogTimer = 0;
 
         // --- TABLA ROBUSTA DE CONVERSIÓN DE NOTAS AMIGA / MOD (PERIODOS) ---
+        // Los motores webAudio-mod-player a veces devuelven frecuencias brutas o índices de periodo de Amiga.
+        // Mapeamos los valores típicos de ProTracker (periodos desde ~856 hasta ~113 o índices directos) a notación estándar.
         const amigaPeriods = [
             856, 808, 762, 720, 678, 640, 604, 570, 538, 508, 480, 453, // Octava 1
             428, 404, 381, 360, 339, 320, 302, 285, 269, 254, 240, 226, // Octava 2
@@ -179,32 +177,42 @@
 
             let noteIndex = -1;
 
+            // 1. Si es un índice directo de nota pequeño (0 a 59)
             if (noteVal < noteNamesTable.length) {
                 noteIndex = noteVal;
             } else {
+                // 2. Si es un valor de periodo de Amiga, buscamos el más cercano en nuestra tabla de periodos
                 let minDiff = 99999;
                 for (let i = 0; i < amigaPeriods.length; i++) {
                     let diff = Math.abs(amigaPeriods[i] - noteVal);
                     if (diff < minDiff) {
                         minDiff = diff;
+                        // Ajustamos offset de octava base para que encaje bien en C-3 / C-4
                         noteIndex = i + 12; 
                     }
                 }
             }
 
+            // Asegurar límites seguros para el array de nombres
             if (noteIndex < 0) noteIndex = 0;
             if (noteIndex >= noteNamesTable.length) noteIndex = noteNamesTable.length - 1;
 
             let noteStr = noteNamesTable[noteIndex];
 
-            let ratio = noteIndex / (noteNamesTable.length - 1);
+            // --- CÁLCULO DE COLOR: CUANTO MÁS AGUDA, MÁS ROJA ---
+            // Mapeamos el índice de la nota (de grave a agudo) a un tono HSL donde el agudo tiende a rojo (HUE 0)
+            // y los graves/medios tiran a cian/verde/azul.
+            let ratio = noteIndex / (noteNamesTable.length - 1); // 0.0 (más grave) a 1.0 (más agudo)
+            
+            // Interpolar tono (Hue): 180 (Cian brillante) -> 0 (Rojo puro)
             let hue = (1 - ratio) * 180; 
-            let lightness = 60 + (ratio * 15);
+            let lightness = 60 + (ratio * 15); // Un poco más brillantes las agudas
             let noteColor = `hsl(${hue}, 100%, ${lightness}%)`;
 
             return { text: noteStr, color: noteColor };
         }
 
+        // --- FUNCIÓN PANIC / SILENCIADOR DE CANALES ---
         function triggerPanicMode() {
             if (!modPlayer || !modPlayer.player || !modPlayer.player.channel) return;
             try {
@@ -220,6 +228,7 @@
             } catch (e) {}
         }
 
+        // --- GESTIÓN DE CLIC IZQUIERDO Y DERECHO EN EL VISOR DE PATTERN (CON PANIC) ---
         document.getElementById('winamp-time').addEventListener('mousedown', function(e) {
             if (!isPlaying || !modPlayer || !modPlayer.player) return;
             
@@ -235,6 +244,7 @@
             if (e.button === 0) {
                 userNavigatedDirection = 1;
                 patternStartTime = performance.now();
+                playbackWatchdogTimer = performance.now();
                 if (currentPos + 1 < totalPatterns) {
                     if (typeof modPlayer.setposition === 'function') {
                         modPlayer.setposition(currentPos + 1);
@@ -245,6 +255,7 @@
             } else if (e.button === 2) {
                 userNavigatedDirection = -1;
                 patternStartTime = performance.now();
+                playbackWatchdogTimer = performance.now();
                 if (currentPos > 0) {
                     if (typeof modPlayer.setposition === 'function') {
                         modPlayer.setposition(currentPos - 1);
@@ -272,6 +283,7 @@
         controls.dampingFactor = 0.05;
         controls.target.set(0, 3, 0);
 
+        // Starfield / Galaxy Background
         const starCount = 3000;
         const starGeo = new THREE.BufferGeometry();
         const starPos = new Float32Array(starCount * 3);
@@ -318,6 +330,7 @@
         light2.position.set(-15, -20, -15);
         scene.add(light2);
 
+        // 3D Circular Bars Matrix (Top)
         const barsGroup = new THREE.Group();
         barsGroup.position.set(0, 10, 0); 
         scene.add(barsGroup);
@@ -345,6 +358,7 @@
             bars.push(bar);
         }
 
+        // --- 3D HOLOGRAPHY: PATTERN PLANE (Bottom) ---
         const trackerCanvas = document.createElement('canvas');
         trackerCanvas.width = 1280;
         trackerCanvas.height = 720;
@@ -444,6 +458,7 @@
             trackerTexture.needsUpdate = true;
         }
 
+        // --- LIL-GUI CONFIGURATION ---
         const gui = new lil.GUI({ title: 'Click to adjust Video or Audio'});
         gui.close()
         
@@ -492,6 +507,7 @@
             if (modPlayer && typeof modPlayer.setrepeat === 'function') modPlayer.setrepeat(v);
         });
 
+        // --- 2. AUDIO MANAGEMENT WITH MODPLAYER ---
         let modPlayer = null;
         let isPlaying = false;
         let currentSongName = "";
@@ -577,10 +593,7 @@
             currentSongName = "Loading...";
             userNavigatedDirection = 1;
             patternStartTime = performance.now();
-            exactPositionTrace = [];
-            loopLocked = false;
-            lockedBlockSize = 0;
-            loopCycleCounter = 0;
+            playbackWatchdogTimer = performance.now();
 
             $('.file-item').removeClass('active');
             playlistItems.forEach(item => {
@@ -615,10 +628,7 @@
                         lastPosition = -1;
                         lastRow = -1;
                         patternStartTime = performance.now();
-                        exactPositionTrace = [];
-                        loopLocked = false;
-                        lockedBlockSize = 0;
-                        loopCycleCounter = 0;
+                        playbackWatchdogTimer = performance.now();
                         
                         if (modPlayer.player.title) {
                             currentSongName = modPlayer.player.title;
@@ -654,10 +664,7 @@
             if (playlistItems.length === 0) return;
             userNavigatedDirection = 1;
             patternStartTime = performance.now();
-            exactPositionTrace = [];
-            loopLocked = false;
-            lockedBlockSize = 0;
-            loopCycleCounter = 0;
+            playbackWatchdogTimer = performance.now();
             if (isShuffle) {
                 let nextIdx;
                 do {
@@ -704,10 +711,6 @@
                 hasStartedPlaying = false;
                 lastPosition = -1;
                 lastRow = -1;
-                exactPositionTrace = [];
-                loopLocked = false;
-                lockedBlockSize = 0;
-                loopCycleCounter = 0;
                 setPlayButtonState(false);
                 $('#now-playing').text("Stopped");
                 trackerCtx.clearRect(0, 0, 1280, 720);
@@ -724,10 +727,7 @@
             triggerPanicMode();
             userNavigatedDirection = -1;
             patternStartTime = performance.now();
-            exactPositionTrace = [];
-            loopLocked = false;
-            lockedBlockSize = 0;
-            loopCycleCounter = 0;
+            playbackWatchdogTimer = performance.now();
             playModuleByIndex(currentPlaylistIndex - 1);
         };
 
@@ -748,10 +748,7 @@
                             triggerPanicMode();
                             userNavigatedDirection = 1;
                             patternStartTime = performance.now();
-                            exactPositionTrace = [];
-                            loopLocked = false;
-                            lockedBlockSize = 0;
-                            loopCycleCounter = 0;
+                            playbackWatchdogTimer = performance.now();
                             playModuleByIndex(foundIdx);
                         }
                     };
@@ -796,65 +793,12 @@
                 const currentPos = modPlayer.player.position !== undefined ? modPlayer.player.position : 0;
                 const currentRow = modPlayer.player.row !== undefined ? modPlayer.player.row : 0;
 
-                let currentPatternNum = 0;
-                try {
-                    currentPatternNum = modPlayer.currentpattern ? modPlayer.currentpattern() : currentPos;
-                } catch(e) {
-                    currentPatternNum = currentPos;
-                }
-
-                if (currentPos !== lastPosition) {
-                    if (exactPositionTrace.length === 0 || exactPositionTrace[exactPositionTrace.length - 1] !== currentPos) {
-                        exactPositionTrace.push(currentPos);
-                        if (exactPositionTrace.length > 140) {
-                            exactPositionTrace.shift();
-                        }
-                    }
-
-                    // --- DETECCIÓN DE BUCLE ESTRICTA: EXACTAMENTE 1 VUELTA DE REPETICIÓN ---
-                    if (!loopLocked && exactPositionTrace.length >= 20) {
-                        for (let blockSize = 4; blockSize <= 40; blockSize++) {
-                            let totalNeeded = blockSize * 2; 
-                            if (exactPositionTrace.length >= totalNeeded) {
-                                let block2 = exactPositionTrace.slice(exactPositionTrace.length - blockSize);
-                                let block1 = exactPositionTrace.slice(exactPositionTrace.length - (blockSize * 2), exactPositionTrace.length - blockSize);
-
-                                let isMatch = true;
-                                for (let i = 0; i < blockSize; i++) {
-                                    if (block1[i] !== block2[i]) {
-                                        isMatch = false;
-                                        break;
-                                    }
-                                }
-
-                                if (isMatch) {
-                                    loopLocked = true;              
-                                    lockedBlockSize = blockSize;
-                                    loopCycleCounter = 0;           // Empezamos a contar desde cero la repetición única
-                                    console.warn(`[BUCLE FIJADO] Bucle detectado de tamaño ${blockSize}. Hará exactamente 1 vuelta extra y saltará.`);
-                                    break;
-                                }
-                            }
-                        }
-                    } else if (loopLocked) {
-                        // Comprobamos si acabamos de entrar en el inicio del bloque repetido detectado (el primer elemento del bloque)
-                        let expectedStartPos = exactPositionTrace[exactPositionTrace.length - 1 - lockedBlockSize];
-                        if (currentPos === expectedStartPos) {
-                            loopCycleCounter++;
-                            console.warn(`[BUCLE VUELTA EXTRA] Vuelta cumplida (${loopCycleCounter}/1).`);
-                            if (loopCycleCounter >= 1) {
-                                console.warn(`[BUCLE COMPLETADO] Se ha completado la única vuelta permitida. Saltando a la siguiente.`);
-                                triggerPanicMode();
-                                playNextSongAutomatic();
-                                exactPositionTrace = [];
-                                loopLocked = false;
-                                lockedBlockSize = 0;
-                                loopCycleCounter = 0;
-                                return;
-                            }
-                        }
-                    }
-
+                if (currentRow !== lastRow || currentPos !== lastPosition) {
+                    playbackWatchdogTimer = performance.now();
+                } else if (performance.now() - playbackWatchdogTimer > 4500) {
+                    triggerPanicMode();
+                    playNextSongAutomatic();
+                    return;
                 }
 
                 lastRow = currentRow;
@@ -889,7 +833,7 @@
                 trackerUpdateTimer++;
                 if (trackerUpdateTimer % 2 === 0) {
                     try {
-                        const pattNum = currentPatternNum;
+                        const pattNum = modPlayer.currentpattern ? modPlayer.currentpattern() : 0;
                         const pattLen = modPlayer.currentpattlen ? modPlayer.currentpattlen() : 64;
                         const rawData = modPlayer.patterndata(pattNum);
 
@@ -971,6 +915,30 @@
         }
 
         animate();
+
+        setInterval(() => {
+            if (!isPlaying || !modPlayer || !modPlayer.player) return;
+
+            if (hasStartedPlaying && modPlayer.player.endofsong === true) {
+                triggerPanicMode();
+                playNextSongAutomatic();
+                return;
+            }
+
+            const currentPos = modPlayer.player.position !== undefined ? modPlayer.player.position : 0;
+            const currentRow = modPlayer.player.row !== undefined ? modPlayer.player.row : 0;
+
+            if (currentRow !== lastRow || currentPos !== lastPosition) {
+                playbackWatchdogTimer = performance.now();
+            } else if (performance.now() - playbackWatchdogTimer > 4500) {
+                triggerPanicMode();
+                playNextSongAutomatic();
+                return;
+            }
+            lastRow = currentRow;
+            lastPosition = currentPos;
+
+        }, 1000);
 
         window.addEventListener('resize', () => {
             const width = container.clientWidth;
