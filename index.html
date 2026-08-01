@@ -138,9 +138,9 @@
             filtroLED: false,
             amigaModel500: true,
             repeatSong: false,
-            camX: 5.8,
-            camY: 18.2,
-            camZ: 24.7,
+            camX: 5.5,
+            camY: 16,
+            camZ: 26.3,
             camFov: 41
         };
 
@@ -404,7 +404,8 @@
         }
 
         // --- LIL-GUI CONFIGURATION ---
-        const gui = new lil.GUI({ title: '⚙️ Pro Visual & Audio Controls' });
+        const gui = new lil.GUI({ title: 'Click to adjust Video or Audio'});
+        gui.close()
         
         const fVisual = gui.addFolder('3D Visualization');
         fVisual.add(fxConfig, 'rotacionBarras', -0.3, 0.3, 0.01).name('Ring Speed');
