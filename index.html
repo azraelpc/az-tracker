@@ -151,7 +151,8 @@
         let currentFileName = "";
         let userNavigatedDirection = 1; 
         let patternStartTime = 0; 
-        
+        let lastTrackedPos = -1;        
+
         let exactPositionTrace = [];
         let loopLocked = false;          
         let lockedBlockSize = 0;         
@@ -811,7 +812,7 @@
                         }
                     }
 
-                    // --- DETECCIÓN DE BUCLE ESTRICTA: EXACTAMENTE 1 VUELTA DE REPETICIÓN ---
+                    // --- DETECCIÓN DE BUCLE ESTRICTA: SALTO AL CRUZAR EL ÚLTIMO PATRÓN HACIA EL INICIO ---
                     if (!loopLocked && exactPositionTrace.length >= 20) {
                         for (let blockSize = 4; blockSize <= 40; blockSize++) {
                             let totalNeeded = blockSize * 2; 
@@ -830,17 +831,16 @@
                                 if (isMatch) {
                                     loopLocked = true;              
                                     lockedBlockSize = blockSize;
-                                    loopCycleCounter = 0;           
-                                    console.warn(`[BUCLE FIJADO] Bucle detectado de tamaño ${blockSize}. Hará exactamente 1 vuelta extra y saltará.`);
+                                    console.warn(`[BUCLE FIJADO] Bucle de tamaño ${blockSize} detectado. Esperando a completar el último patrón.`);
                                     break;
                                 }
                             }
                         }
+
                     } else if (loopLocked) {
-                        // Contamos los cambios de posición exactos según el tamaño del bloque detectado
-                        loopCycleCounter++;
-                        if (loopCycleCounter >= lockedBlockSize) {
-                            console.warn(`[BUCLE COMPLETADO] Se ha completado la única vuelta permitida. Saltando a la siguiente.`);
+                        // Detectamos el momento exacto en que la canción intenta volver a la posición inicial (0 o el inicio del bloque) tras tocar el último patrón
+                        if (currentPos === 0 || currentPos < lastPosition) {
+                            console.warn(`[BUCLE COMPLETADO] Último patrón finalizado por completo. Saltando a la siguiente.`);
                             triggerPanicMode();
                             playNextSongAutomatic();
                             exactPositionTrace = [];
@@ -850,9 +850,7 @@
                             return;
                         }
                     }
-
                 }
-
                 lastRow = currentRow;
 
                 if (modPlayer.player.position > 0) {
