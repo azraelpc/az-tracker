@@ -4,7 +4,7 @@ AzTracker 3D is an immersive, web-based tracker music player and 3D visualizer b
 
 Demo: https://azraelpc.com/mods/
 
-<img width="800" src="https://github.com/user-attachments/assets/8855d060-9f8e-4a1e-b723-cb5607f9a522" />
+<img width="800" src="https://github.com/user-attachments/assets/537f2b66-7987-4a38-b6c8-ba03bef5ca8d" />
 
 ---
 
