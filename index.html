@@ -233,7 +233,6 @@
 
             triggerPanicMode();
 
-            // Forzamos la fila a 0 al cambiar de posición por clic
             if (modPlayer.player.row !== undefined) {
                 modPlayer.player.row = 0;
             }
@@ -571,6 +570,7 @@
             const iconSvg = playing 
                 ? '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>' 
                 : '<path d="M8 5v14l11-7z"/>';                  
+            $('#play-press-btn').html(`<svg viewBox="0 0 24 24">${iconSvg}</svg>`);
             $('#play-pause-btn').html(`<svg viewBox="0 0 24 24">${iconSvg}</svg>`);
         }
 
@@ -767,9 +767,8 @@
             containerElement.appendChild(list);
         }
 
-        // --- VIGILANTE INDEPENDIENTE EN SEGUNDO PLANO (INTERVALO FIJO) ---
-        // Se ejecuta cada 250ms de forma continua aunque la pestaña esté minimizada o en segundo plano
-        setInterval(() => {
+        // --- FUNCIÓN CENTRALIZADA DE EVALUACIÓN DE POSICIÓN Y BUCLES ---
+        function checkLoopAndPlayback() {
             if (!isPlaying || !modPlayer || !modPlayer.player) return;
 
             if (hasStartedPlaying && modPlayer.player.endofsong === true) {
@@ -788,7 +787,7 @@
                     }
                 }
 
-                // Detección de bucle estricta en segundo plano
+                // --- DETECCIÓN DE BUCLE ESTRICTA ---
                 if (!loopLocked && exactPositionTrace.length >= 20) {
                     for (let blockSize = 4; blockSize <= 40; blockSize++) {
                         let totalNeeded = blockSize * 2; 
@@ -807,12 +806,14 @@
                             if (isMatch) {
                                 loopLocked = true;              
                                 lockedBlockSize = blockSize;
+                                console.warn(`[BUCLE FIJADO] Bucle de tamaño ${blockSize} detectado. Esperando el fin del último patrón.`);
                                 break;
                             }
                         }
                     }
                 } else if (loopLocked) {
                     if (currentPos === 0 || currentPos < lastPosition) {
+                        console.warn(`[BUCLE COMPLETADO] Último patrón finalizado. Saltando a la siguiente.`);
                         triggerPanicMode();
                         playNextSongAutomatic();
                         exactPositionTrace = [];
@@ -823,8 +824,27 @@
                     }
                 }
 
+                if (modPlayer.player.position > 0) {
+                    hasStartedPlaying = true;
+                }
+                
+                if (currentPos > lastPosition) {
+                    userNavigatedDirection = 1;
+                } else {
+                    userNavigatedDirection = -1;
+                }
+                patternStartTime = performance.now(); 
+
+                if (lastPosition > currentPos && currentPos === 0) {
+                    hasStartedPlaying = true;
+                }
                 lastPosition = currentPos;
             }
+        }
+
+        // --- VIGILANTE DE SEGUNDO PLANO (Mantiene la detección activa si la pestaña no está enfocada) ---
+        setInterval(() => {
+            checkLoopAndPlayback();
         }, 250);
 
         const clock = new THREE.Clock();
@@ -853,6 +873,9 @@
             trackerMesh.position.y = -2.5 + Math.sin(elapsedTime * 2) * 0.08;
 
             if (isPlaying && modPlayer && modPlayer.player) {
+                // Ejecutamos la comprobación de bucles y reproducción en cada frame
+                checkLoopAndPlayback();
+
                 const currentPos = modPlayer.player.position !== undefined ? modPlayer.player.position : 0;
                 const currentRow = modPlayer.player.row !== undefined ? modPlayer.player.row : 0;
 
@@ -864,19 +887,6 @@
                 }
 
                 lastRow = currentRow;
-
-                if (modPlayer.player.position > 0) {
-                    hasStartedPlaying = true;
-                }
-                
-                if (currentPos !== lastPosition) {
-                    if (currentPos > lastPosition) {
-                        userNavigatedDirection = 1;
-                    } else {
-                        userNavigatedDirection = -1;
-                    }
-                    patternStartTime = performance.now(); 
-                }
 
                 const totalPatterns = (modPlayer.player.songlen !== undefined && modPlayer.player.songlen > 0) 
                     ? modPlayer.player.songlen 
