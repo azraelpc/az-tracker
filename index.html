@@ -830,28 +830,24 @@
                                 if (isMatch) {
                                     loopLocked = true;              
                                     lockedBlockSize = blockSize;
-                                    loopCycleCounter = 0;           // Empezamos a contar desde cero la repetición única
+                                    loopCycleCounter = 0;           
                                     console.warn(`[BUCLE FIJADO] Bucle detectado de tamaño ${blockSize}. Hará exactamente 1 vuelta extra y saltará.`);
                                     break;
                                 }
                             }
                         }
                     } else if (loopLocked) {
-                        // Comprobamos si acabamos de entrar en el inicio del bloque repetido detectado (el primer elemento del bloque)
-                        let expectedStartPos = exactPositionTrace[exactPositionTrace.length - 1 - lockedBlockSize];
-                        if (currentPos === expectedStartPos) {
-                            loopCycleCounter++;
-                            console.warn(`[BUCLE VUELTA EXTRA] Vuelta cumplida (${loopCycleCounter}/1).`);
-                            if (loopCycleCounter >= 1) {
-                                console.warn(`[BUCLE COMPLETADO] Se ha completado la única vuelta permitida. Saltando a la siguiente.`);
-                                triggerPanicMode();
-                                playNextSongAutomatic();
-                                exactPositionTrace = [];
-                                loopLocked = false;
-                                lockedBlockSize = 0;
-                                loopCycleCounter = 0;
-                                return;
-                            }
+                        // Contamos los cambios de posición exactos según el tamaño del bloque detectado
+                        loopCycleCounter++;
+                        if (loopCycleCounter >= lockedBlockSize) {
+                            console.warn(`[BUCLE COMPLETADO] Se ha completado la única vuelta permitida. Saltando a la siguiente.`);
+                            triggerPanicMode();
+                            playNextSongAutomatic();
+                            exactPositionTrace = [];
+                            loopLocked = false;
+                            lockedBlockSize = 0;
+                            loopCycleCounter = 0;
+                            return;
                         }
                     }
 
