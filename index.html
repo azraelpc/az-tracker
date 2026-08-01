@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AzTracker 3D - Holographic Pattern Edition</title>
+    
+    <!-- jQuery -->
+    <script type="text/javascript" src="https://code.jquery.com/jquery-1.9.0.min.js"></script>
+    
+    <!-- Scripts del motor webaudio-mod-player -->
+    <script type="text/javascript" src="mod_engine/js/utils.js"></script>
+    <script type="text/javascript" src="mod_engine/js/pt.js"></script>
+    <script type="text/javascript" src="mod_engine/js/st3.js"></script>
+    <script type="text/javascript" src="mod_engine/js/ft2.js"></script>
+    <script type="text/javascript" src="mod_engine/js/player.js"></script>
+
+    <!-- Three.js y OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- lil-gui (Interfaz Pro) -->
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.18"></script>
+
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #000; font-family: system-ui, -apple-system, sans-serif; color: #fff;
+        }
+        #ui {
+            position: absolute; top: 0; left: 0; width: 380px; height: 100%;
+            background: rgba(15, 15, 18, 0.94); backdrop-filter: blur(12px);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex; flex-direction: column; z-index: 10;
+            box-shadow: 10px 0 30px rgba(0,0,0,0.6);
+        }
+        .header { 
+            padding: 16px 20px; font-size: 1.1rem; font-weight: 600; 
+            border-bottom: 1px solid rgba(255,255,255,0.08); 
+            letter-spacing: 0.5px; color: #f3f4f6;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        #file-browser { flex: 1; overflow-y: auto; padding: 12px; }
+        #file-browser ul { list-style: none; padding-left: 12px; margin: 4px 0; }
+        .folder-title { font-weight: 600; color: #9ca3af; margin: 8px 0 4px 0; font-size: 0.82rem; }
+        .file-item { 
+            padding: 6px 10px; cursor: pointer; border-radius: 6px; 
+            font-size: 0.8rem; transition: all 0.2s ease; 
+            color: #d1d5db; margin-bottom: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .file-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+        .file-item.active { background: #3b82f6; color: #fff; font-weight: 500; }
+        
+        #canvas-container { 
+            width: calc(100% - 380px); height: 100%; 
+            position: absolute; top: 0; left: 380px; z-index: 1; 
+        }
+        
+        #winamp-controls { 
+            padding: 15px 20px; background: rgba(10, 10, 12, 0.9); 
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        #now-playing { 
+            font-size: 0.75rem; opacity: 0.7; margin-bottom: 8px; 
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+            color: #00ffcc; font-family: monospace;
+        }
+        .winamp-panel {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #18181b; border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px; padding: 6px 10px;
+        }
+        .winamp-btns { display: flex; gap: 4px; align-items: center; }
+        button.w-btn {
+            background: #27272a; border: 1px solid rgba(255,255,255,0.12); color: #d4d4d8;
+            width: 30px; height: 30px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s, color 0.2s, transform 0.1s;
+        }
+        button.w-btn svg { width: 13px; height: 13px; fill: currentColor; }
+        button.w-btn:hover { background: #3f3f46; color: #00ffcc; }
+        button.w-btn:active { transform: scale(0.95); }
+        button.w-btn.active-shuffle { background: #3b82f6; color: #fff; border-color: #60a5fa; }
+        .winamp-display {
+            font-family: monospace; font-size: 0.75rem; color: #fbbf24; background: #000;
+            padding: 4px 8px; border-radius: 4px; border: inset 1px #333; letter-spacing: 1px;
+            cursor: pointer; user-select: none;
+        }
+        .winamp-display:hover { border-color: #fbbf24; }
+
+        .lil-gui { --background-color: rgba(15, 15, 18, 0.95); --text-color: #f3f4f6; --title-background-color: rgba(0, 0, 0, 0.4); font-family: system-ui, sans-serif; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="header">AzTracker 3D</div>
+        <div id="file-browser">Loading /music library...</div>
+        
+        <!-- Winamp Control Panel -->
+        <div id="winamp-controls">
+            <div id="now-playing">STANDBY - Select a module</div>
+            <div class="winamp-panel">
+                <div class="winamp-btns">
+                    <button class="w-btn" onclick="winampPrev()" title="Previous">
+                        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                    </button>
+                    <button class="w-btn" id="play-pause-btn" onclick="winampPlayPause()" title="Play / Pause">
+                        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                    <button class="w-btn" onclick="winampStop()" title="Stop">
+                        <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                    </button>
+                    <button class="w-btn" onclick="winampNext()" title="Next">
+                        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>
+                    </button>
+                    <button class="w-btn" id="shuffle-btn" onclick="toggleShuffle()" title="Shuffle Mode">
+                        <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                    </button>
+                </div>
+                <div class="winamp-display" id="winamp-time" oncontextmenu="return false;" title="Left Click: Next Pattern | Right Click: Previous Pattern">PAT: 0/0</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // --- CONFIGURABLE PARAMETERS (LIL-GUI) ---
+        const fxConfig = {
+            rotacionBarras: 0.16,
+            rotacionGalaxia: 0.06,
+            alturaBarras: 9.5,
+            radioAnillo: 10,
+            radioEstrellas: 2.5,
+            volumenMaster: 9.5,
+            separacionStereo: 1,
+            filtroLED: false,
+            amigaModel500: true,
+            repeatSong: false,
+            camX: 8.9,
+            camY: 22.1,
+            camZ: 27.2,
+            camFov: 41
+        };
+
+        let lastPosition = -1;
+        let lastRow = -1;
+        let hasStartedPlaying = false;
+        let currentSongTitle = "UNKNOWN";
+        let currentFileName = "";
+        let userNavigatedDirection = 1; 
+        let patternStartTime = 0; 
+        let playbackWatchdogTimer = 0; // Control de bloqueo por congelación en Row 0
+
+        // --- FUNCIÓN PANIC / SILENCIADOR DE CANALES ---
+        function triggerPanicMode() {
+            if (!modPlayer || !modPlayer.player || !modPlayer.player.channel) return;
+            try {
+                for (let ch = 0; ch < modPlayer.player.channel.length; ch++) {
+                    let cObj = modPlayer.player.channel[ch];
+                    if (cObj) {
+                        cObj.noteon = 0;
+                        cObj.voicevolume = 0;
+                        cObj.volume = 0;
+                        cObj.volramp = 1.0;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // --- GESTIÓN DE CLIC IZQUIERDO Y DERECHO EN EL VISOR DE PATTERN (CON PANIC) ---
+        document.getElementById('winamp-time').addEventListener('mousedown', function(e) {
+            if (!isPlaying || !modPlayer || !modPlayer.player) return;
+            
+            let currentPos = modPlayer.player.position !== undefined ? modPlayer.player.position : 0;
+            let totalPatterns = (modPlayer.player.songlen !== undefined && modPlayer.player.songlen > 0) 
+                ? modPlayer.player.songlen 
+                : (modPlayer.player.patterns ? modPlayer.player.patterns.length : 0);
+
+            if (totalPatterns <= 0) return;
+
+            triggerPanicMode();
+
+            if (e.button === 0) {
+                userNavigatedDirection = 1;
+                patternStartTime = performance.now();
+                playbackWatchdogTimer = performance.now(); // Resetear watchdog al interactuar
+                if (currentPos + 1 < totalPatterns) {
+                    if (typeof modPlayer.setposition === 'function') {
+                        modPlayer.setposition(currentPos + 1);
+                    } else if (modPlayer.player.position !== undefined) {
+                        modPlayer.player.position = currentPos + 1;
+                    }
+                }
+            } else if (e.button === 2) {
+                userNavigatedDirection = -1;
+                patternStartTime = performance.now();
+                playbackWatchdogTimer = performance.now(); // Resetear watchdog al interactuar
+                if (currentPos > 0) {
+                    if (typeof modPlayer.setposition === 'function') {
+                        modPlayer.setposition(currentPos - 1);
+                    } else if (modPlayer.player.position !== undefined) {
+                        modPlayer.player.position = currentPos - 1;
+                    }
+                }
+            }
+        });
+
+        // --- 1. 3D SETUP & SCENE ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(fxConfig.camFov, container.clientWidth / container.clientHeight, 0.1, 2000);
+        camera.position.set(fxConfig.camX, fxConfig.camY, fxConfig.camZ); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 3, 0);
+
+        // Starfield / Galaxy Background
+        const starCount = 3000;
+        const starGeo = new THREE.BufferGeometry();
+        const starPos = new Float32Array(starCount * 3);
+        const starColors = new Float32Array(starCount * 3);
+
+        const colorPalette = [
+            new THREE.Color(0xffffff),
+            new THREE.Color(0x3b82f6),
+            new THREE.Color(0xec4899),
+            new THREE.Color(0x8b5cf6)
+        ];
+
+        for (let i = 0; i < starCount * 3; i += 3) {
+            starPos[i] = (Math.random() - 0.5) * 800;
+            starPos[i+1] = (Math.random() - 0.5) * 800;
+            starPos[i+2] = (Math.random() - 0.5) * 800;
+
+            let randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+            starColors[i] = randomColor.r;
+            starColors[i+1] = randomColor.g;
+            starColors[i+2] = randomColor.b;
+        }
+
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+        starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+        const starMat = new THREE.PointsMaterial({
+            size: fxConfig.radioEstrellas, 
+            vertexColors: true, 
+            transparent: true, 
+            opacity: 0.8,
+            depthWrite: false
+        });
+        const galaxyStars = new THREE.Points(starGeo, starMat);
+        scene.add(galaxyStars);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        
+        const light1 = new THREE.PointLight(0x00ffcc, 4, 80);
+        light1.position.set(15, 20, 15);
+        scene.add(light1);
+
+        const light2 = new THREE.PointLight(0xff0077, 4, 80);
+        light2.position.set(-15, -20, -15);
+        scene.add(light2);
+
+        // 3D Circular Bars Matrix (Top)
+        const barsGroup = new THREE.Group();
+        barsGroup.position.set(0, 10, 0); 
+        scene.add(barsGroup);
+
+        const numBars = 32;
+        const barWidth = 0.8;
+        const bars = [];
+        const geometry = new THREE.BoxGeometry(barWidth, 1, barWidth);
+        
+        for (let i = 0; i < numBars; i++) {
+            const angle = (i / numBars) * Math.PI * 2;
+            const radius = fxConfig.radioAnillo;
+
+            const material = new THREE.MeshStandardMaterial({
+                color: new THREE.Color().setHSL(i / numBars, 0.8, 0.6),
+                roughness: 0.2, metalness: 0.8
+            });
+
+            const bar = new THREE.Mesh(geometry, material);
+            bar.position.x = Math.cos(angle) * radius;
+            bar.position.z = Math.sin(angle) * radius;
+            bar.rotation.y = -angle;
+            
+            barsGroup.add(bar);
+            bars.push(bar);
+        }
+
+        // --- 3D HOLOGRAPHY: PATTERN PLANE (Bottom) ---
+        const trackerCanvas = document.createElement('canvas');
+        trackerCanvas.width = 1280;
+        trackerCanvas.height = 720;
+        const trackerCtx = trackerCanvas.getContext('2d');
+
+        const trackerTexture = new THREE.CanvasTexture(trackerCanvas);
+        trackerTexture.minFilter = THREE.LinearFilter;
+
+        const trackerPlaneMat = new THREE.MeshBasicMaterial({
+            map: trackerTexture,
+            transparent: true,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const trackerPlaneGeo = new THREE.PlaneGeometry(28, 15); 
+        const trackerMesh = new THREE.Mesh(trackerPlaneGeo, trackerPlaneMat);
+        trackerMesh.position.set(0, -2.5, 3); 
+        trackerMesh.rotation.x = -Math.PI / 2.6; 
+        scene.add(trackerMesh);
+
+        function renderTrackerTextureToCanvas(pos, pattNum, row, pattLen, rawData) {
+            trackerCtx.clearRect(0, 0, 1280, 720);
+
+            trackerCtx.fillStyle = 'rgba(2, 8, 15, 0.9)';
+            trackerCtx.fillRect(0, 0, 1280, 720);
+
+            trackerCtx.shadowColor = '#00ffcc';
+            trackerCtx.shadowBlur = 15;
+
+            trackerCtx.strokeStyle = '#00ffcc';
+            trackerCtx.lineWidth = 6;
+            trackerCtx.strokeRect(30, 30, 1220, 660);
+
+            trackerCtx.fillStyle = '#00ffcc';
+            trackerCtx.font = 'bold 26px monospace';
+            let displayTitle = currentSongTitle !== "UNKNOWN" && currentSongTitle !== "" ? currentSongTitle : currentFileName;
+            trackerCtx.fillText(`[ ${displayTitle} ] (${currentFileName})`, 60, 80);
+
+            trackerCtx.font = '20px monospace';
+            trackerCtx.fillStyle = '#00ffcc';
+            trackerCtx.fillText(`POS:${pos}  |  PATTERN:${pattNum}  |  CURRENT ROW:${row}  |  LENGTH:${pattLen}`, 60, 120);
+
+            if (!rawData) {
+                trackerCtx.fillStyle = '#00ffcc';
+                trackerCtx.font = '32px monospace';
+                trackerCtx.fillText('Loading notes stream...', 380, 380);
+                trackerTexture.needsUpdate = true;
+                return;
+            }
+
+            const totalChannels = modPlayer.channels || 4;
+            const displayChannels = Math.min(totalChannels, 16);
+            
+            const startX = 60;
+            const availableWidth = 1160;
+            const colWidth = availableWidth / (displayChannels + 1);
+
+            trackerCtx.font = '16px monospace';
+            trackerCtx.fillStyle = '#00cc99';
+            trackerCtx.fillText('ROW', startX, 175);
+            for (let c = 0; c < displayChannels; c++) {
+                let chName = `CH${c+1}`;
+                trackerCtx.fillText(chName, startX + 90 + (c * colWidth), 175);
+            }
+
+            const startRow = row;
+            const endRow = Math.min(pattLen, row + 12);
+
+            let y = 225;
+            for (let r = startRow; r < endRow; r++) {
+                if (r === row) {
+                    trackerCtx.fillStyle = 'rgba(0, 255, 204, 0.4)';
+                    trackerCtx.fillRect(45, y - 20, 1190, 34);
+                    trackerCtx.fillStyle = '#ffffff';
+                    trackerCtx.shadowBlur = 22;
+                } else {
+                    trackerCtx.fillStyle = '#00ffcc';
+                    trackerCtx.shadowBlur = 8;
+                }
+
+                let rowNum = (r < 10 ? '0' + r : r);
+                trackerCtx.fillText(rowNum, startX, y);
+
+                for (let c = 0; c < displayChannels; c++) {
+                    const idx = r * (totalChannels * 5) + (c * 5);
+                    const note = rawData[idx];
+                    let noteStr = '---';
+                    if (note === 255 || note === undefined) {
+                        noteStr = '...';
+                    } else {
+                        noteStr = note.toString().padStart(3, '0');
+                    }
+                    trackerCtx.fillText(noteStr, startX + 90 + (c * colWidth), y);
+                }
+
+                y += 36;
+            }
+
+            trackerTexture.needsUpdate = true;
+        }
+
+        // --- LIL-GUI CONFIGURATION ---
+        const gui = new lil.GUI({ title: '⚙️ Pro Visual & Audio Controls' });
+        
+        const fVisual = gui.addFolder('3D Visualization');
+        fVisual.add(fxConfig, 'rotacionBarras', -0.3, 0.3, 0.01).name('Ring Speed');
+        fVisual.add(fxConfig, 'rotacionGalaxia', -0.1, 0.1, 0.005).name('Galaxy Speed');
+        fVisual.add(fxConfig, 'alturaBarras', 2.0, 30.0, 0.5).name('Height Sensitivity');
+        fVisual.add(fxConfig, 'radioAnillo', 5.0, 20.0, 0.5).name('Ring Radius').onChange(v => {
+            for (let i = 0; i < numBars; i++) {
+                const angle = (i / numBars) * Math.PI * 2;
+                bars[i].position.x = Math.cos(angle) * v;
+                bars[i].position.z = Math.sin(angle) * v;
+            }
+        });
+        fVisual.add(fxConfig, 'radioEstrellas', 0.5, 4.0, 0.1).name('Star Size').onChange(v => {
+            starMat.size = v;
+        });
+
+        // Camera Adjustments Folder
+        const fCamera = gui.addFolder('Camera Settings');
+        const guiCamX = fCamera.add(fxConfig, 'camX', -50, 50, 1).name('Cam X').onChange(v => camera.position.x = v);
+        const guiCamY = fCamera.add(fxConfig, 'camY', -10, 80, 1).name('Cam Y').onChange(v => camera.position.y = v);
+        const guiCamZ = fCamera.add(fxConfig, 'camZ', -50, 100, 1).name('Cam Z').onChange(v => camera.position.z = v);
+        const guiCamFov = fCamera.add(fxConfig, 'camFov', 20, 100, 1).name('FOV / Zoom').onChange(v => {
+            camera.fov = v;
+            camera.updateProjectionMatrix();
+        });
+
+        const fAudio = gui.addFolder('Audio Engine & Tracker');
+        fAudio.add(fxConfig, 'volumenMaster', 1.0, 16.0, 0.5).name('Master Volume').onChange(v => {
+            if (modPlayer) {
+                let mappedVol = 17.0 - v;
+                modPlayer.mixval = mappedVol;
+                if (modPlayer.player) modPlayer.player.mixval = mappedVol;
+            }
+        });
+        fAudio.add(fxConfig, 'separacionStereo', { 'Standard': 0, 'Narrow Stereo': 1, 'Mono': 2 }).name('Stereo Mode').onChange(v => {
+            if (modPlayer && typeof modPlayer.setseparation === 'function') modPlayer.setseparation(v);
+        });
+        fAudio.add(fxConfig, 'filtroLED').name('Amiga LED Filter').onChange(v => {
+            if (modPlayer && modPlayer.lowpassNode) modPlayer.setfilter(v);
+        });
+        fAudio.add(fxConfig, 'amigaModel500').name('Amiga 500 Model').onChange(v => {
+            if (modPlayer && modPlayer.filterNode) modPlayer.setamigamodel(v ? "500" : "1200");
+        });
+        fAudio.add(fxConfig, 'repeatSong').name('Loop / Repeat').onChange(v => {
+            if (modPlayer && typeof modPlayer.setrepeat === 'function') modPlayer.setrepeat(v);
+        });
+
+        // --- 2. AUDIO MANAGEMENT WITH MODPLAYER ---
+        let modPlayer = null;
+        let isPlaying = false;
+        let currentSongName = "";
+        let playlistItems = [];
+        let currentPlaylistIndex = 0;
+        let isShuffle = false;
+
+        let analyser = null;
+        let frequencyData = null;
+
+        $(document).ready(function() {
+            if (typeof Modplayer !== 'undefined') {
+                modPlayer = new Modplayer();
+            } else {
+                console.error("Modplayer class is not defined.");
+            }
+
+            window.addEventListener('click', () => {
+                if (modPlayer && modPlayer.context && modPlayer.context.state === 'suspended') {
+                    modPlayer.context.resume();
+                }
+                setupAnalyserNode();
+            }, { once: true });
+
+            fetch('api.php')
+                .then(res => res.json())
+                .then(data => {
+                    const container = document.getElementById('file-browser');
+                    container.innerHTML = '';
+                    if(data.length === 0) {
+                        container.innerHTML = '<div style="padding:10px; color:#ef4444;">No files found in /music</div>';
+                        return;
+                    }
+                    extractPlaylistFlat(data);
+                    renderTree(data, container);
+                })
+                .catch(err => {
+                    document.getElementById('file-browser').innerHTML = '<div style="padding:10px; color:#ef4444;">Error connecting to api.php</div>';
+                });
+        });
+
+        function setupAnalyserNode() {
+            if (!analyser && modPlayer && modPlayer.context) {
+                try {
+                    analyser = modPlayer.context.createAnalyser();
+                    analyser.fftSize = 64;
+                    analyser.smoothingTimeConstant = 0.8;
+                    frequencyData = new Uint8Array(analyser.frequencyBinCount);
+
+                    if (modPlayer.lowpassNode) {
+                        modPlayer.lowpassNode.connect(analyser);
+                        analyser.connect(modPlayer.context.destination);
+                    }
+                } catch(e) {
+                    console.log("Error setting up AnalyserNode:", e);
+                }
+            }
+        }
+
+        function extractPlaylistFlat(items) {
+            items.forEach(item => {
+                if (item.type === 'folder') {
+                    extractPlaylistFlat(item.children);
+                } else {
+                    playlistItems.push(item);
+                }
+            });
+        }
+
+        function setPlayButtonState(playing) {
+            const iconSvg = playing 
+                ? '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>' 
+                : '<path d="M8 5v14l11-7z"/>';                  
+            $('#play-pause-btn').html(`<svg viewBox="0 0 24 24">${iconSvg}</svg>`);
+        }
+
+        window.playModuleByIndex = function(index) {
+            if (playlistItems.length === 0 || !modPlayer) return;
+            currentPlaylistIndex = (index + playlistItems.length) % playlistItems.length;
+            const targetItem = playlistItems[currentPlaylistIndex];
+
+            currentFileName = targetItem.name;
+            currentSongName = "Loading...";
+            userNavigatedDirection = 1;
+            patternStartTime = performance.now();
+            playbackWatchdogTimer = performance.now(); // Iniciar crono watchdog
+
+            $('.file-item').removeClass('active');
+            playlistItems.forEach(item => {
+                if (item.domElement && item.path === targetItem.path) {
+                    $(item.domElement).addClass('active');
+                    item.domElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+
+            $('#now-playing').text("Loading " + targetItem.name + "...");
+            
+            try {
+                modPlayer.stop();
+
+                modPlayer.onReady = function() {
+                    try {
+                        let mappedVol = 17.0 - fxConfig.volumenMaster;
+                        modPlayer.mixval = mappedVol;
+                        if (modPlayer.player) modPlayer.player.mixval = mappedVol;
+
+                        let songLen = modPlayer.player.songlen || (modPlayer.player.patterntable ? modPlayer.player.patterntable.length : 0);
+                        let totalPatterns = modPlayer.player.patterns || (modPlayer.player.pattern ? modPlayer.player.pattern.length : 0);
+                        
+                        if (songLen <= 0 || totalPatterns <= 0) {
+                            playNextSongAutomatic();
+                            return;
+                        }
+
+                        modPlayer.play();
+                        isPlaying = true;
+                        hasStartedPlaying = false;
+                        lastPosition = -1;
+                        lastRow = -1;
+                        patternStartTime = performance.now();
+                        playbackWatchdogTimer = performance.now(); // Resetear watchdog al arrancar play
+                        
+                        if (modPlayer.player.title) {
+                            currentSongName = modPlayer.player.title;
+                        } else if (modPlayer.title) {
+                            currentSongName = modPlayer.title;
+                        } else {
+                            currentSongName = targetItem.name;
+                        }
+
+                        $('#now-playing').text("Playing: " + currentFileName);
+                        setPlayButtonState(true);
+                        setupAnalyserNode();
+
+                        if (typeof modPlayer.setseparation === 'function') modPlayer.setseparation(fxConfig.separacionStereo);
+                        if (modPlayer.lowpassNode) modPlayer.setfilter(fxConfig.filtroLED);
+                        if (modPlayer.filterNode) modPlayer.setamigamodel(fxConfig.amigaModel500 ? "500" : "1200");
+                        if (typeof modPlayer.setrepeat === 'function') modPlayer.setrepeat(fxConfig.repeatSong);
+
+                    } catch (playErr) {
+                        console.error("Error starting playback in onReady:", playErr);
+                        playNextSongAutomatic();
+                    }
+                };
+
+                modPlayer.load(targetItem.path);
+            } catch(err) {
+                console.error("Error loading module:", err);
+                playNextSongAutomatic();
+            }
+        };
+
+        window.playNextSongAutomatic = function() {
+            if (playlistItems.length === 0) return;
+            userNavigatedDirection = 1;
+            patternStartTime = performance.now();
+            playbackWatchdogTimer = performance.now();
+            if (isShuffle) {
+                let nextIdx;
+                do {
+                    nextIdx = Math.floor(Math.random() * playlistItems.length);
+                } while (nextIdx === currentPlaylistIndex && playlistItems.length > 1);
+                playModuleByIndex(nextIdx);
+            } else {
+                playModuleByIndex(currentPlaylistIndex + 1);
+            }
+        };
+
+        window.toggleShuffle = function() {
+            isShuffle = !isShuffle;
+            const btn = document.getElementById('shuffle-btn');
+            if (isShuffle) {
+                btn.classList.add('active-shuffle');
+                btn.title = "Shuffle: ON";
+            } else {
+                btn.classList.remove('active-shuffle');
+                btn.title = "Shuffle: OFF";
+            }
+        };
+
+        // --- Winamp Controls ---
+        window.winampPlayPause = function() {
+            if (!modPlayer || playlistItems.length === 0) return;
+            
+            if (isPlaying) {
+                try { modPlayer.pause(); } catch(e) { modPlayer.stop(); }
+                isPlaying = false;
+                setPlayButtonState(false);
+                $('#now-playing').text("Paused");
+            } else {
+                if (playlistItems.length > 0) {
+                    playModuleByIndex(currentPlaylistIndex);
+                }
+            }
+        };
+
+        window.winampStop = function() {
+            if (modPlayer) {
+                triggerPanicMode();
+                try { modPlayer.stop(); } catch(e) {}
+                isPlaying = false;
+                hasStartedPlaying = false;
+                lastPosition = -1;
+                lastRow = -1;
+                setPlayButtonState(false);
+                $('#now-playing').text("Stopped");
+                trackerCtx.clearRect(0, 0, 1280, 720);
+                trackerTexture.needsUpdate = true;
+            }
+        };
+
+        window.winampNext = function() {
+            triggerPanicMode();
+            playNextSongAutomatic();
+        };
+
+        window.winampPrev = function() {
+            triggerPanicMode();
+            userNavigatedDirection = -1;
+            patternStartTime = performance.now();
+            playbackWatchdogTimer = performance.now();
+            playModuleByIndex(currentPlaylistIndex - 1);
+        };
+
+        function renderTree(items, containerElement) {
+            const list = document.createElement('ul');
+            items.forEach(item => {
+                const li = document.createElement('li');
+                if (item.type === 'folder') {
+                    li.innerHTML = `<div class="folder-title">📁 ${item.name}</div>`;
+                    renderTree(item.children, li);
+                } else {
+                    li.className = 'file-item';
+                    li.textContent = `🎵 ${item.name}`;
+                    item.domElement = li;
+                    li.onclick = () => {
+                        const foundIdx = playlistItems.findIndex(p => p.path === item.path);
+                        if (foundIdx !== -1) {
+                            triggerPanicMode();
+                            userNavigatedDirection = 1;
+                            patternStartTime = performance.now();
+                            playbackWatchdogTimer = performance.now();
+                            playModuleByIndex(foundIdx);
+                        }
+                    };
+                }
+                list.appendChild(li);
+            });
+            containerElement.appendChild(list);
+        }
+
+        // --- 3. 3D ANIMATION LOOP & VISUALIZER ---
+        const clock = new THREE.Clock();
+        let trackerUpdateTimer = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+            
+            controls.update();
+
+            fxConfig.camX = Math.round(camera.position.x * 10) / 10;
+            fxConfig.camY = Math.round(camera.position.y * 10) / 10;
+            fxConfig.camZ = Math.round(camera.position.z * 10) / 10;
+            fxConfig.camFov = Math.round(camera.fov * 10) / 10;
+            guiCamX.updateDisplay();
+            guiCamY.updateDisplay();
+            guiCamZ.updateDisplay();
+            guiCamFov.updateDisplay();
+
+            galaxyStars.rotation.y = elapsedTime * fxConfig.rotacionGalaxia;
+            galaxyStars.rotation.x = elapsedTime * (fxConfig.rotacionGalaxia * 0.5);
+            barsGroup.rotation.y += fxConfig.rotacionBarras * 0.05;
+
+            trackerMesh.position.y = -2.5 + Math.sin(elapsedTime * 2) * 0.08;
+
+            if (isPlaying && modPlayer && modPlayer.player) {
+                // --- DETECCIÓN DE FIN DE CANCIÓN NATIVA ---
+                if (hasStartedPlaying && modPlayer.player.endofsong === true) {
+                    triggerPanicMode();
+                    playNextSongAutomatic();
+                    return;
+                }
+
+                const currentPos = modPlayer.player.position !== undefined ? modPlayer.player.position : 0;
+                const currentRow = modPlayer.player.row !== undefined ? modPlayer.player.row : 0;
+
+                // --- WATCHDOG DE BLOQUEO / ARCHIVO CORRUPTO ---
+                // Si pasan más de 4.5 segundos y la fila (row) o la posición (position) no han cambiado en absoluto,
+                // significa que el motor está congelado intentando leer un archivo corrupto o inválido. Saltamos inmediatamente.
+                if (currentRow !== lastRow || currentPos !== lastPosition) {
+                    playbackWatchdogTimer = performance.now(); // Hay movimiento, reseteamos el watchdog
+                } else if (performance.now() - playbackWatchdogTimer > 4500) {
+                    console.warn("⚠️ Reproductor atascado en Row 0 / Pos congelada. Saltando a la siguiente canción...");
+                    triggerPanicMode();
+                    playNextSongAutomatic();
+                    return;
+                }
+
+                lastRow = currentRow;
+
+                if (modPlayer.player.position > 0) {
+                    hasStartedPlaying = true;
+                }
+                
+                if (currentPos !== lastPosition) {
+                    if (currentPos > lastPosition) {
+                        userNavigatedDirection = 1;
+                    } else {
+                        userNavigatedDirection = -1;
+                    }
+                    patternStartTime = performance.now(); 
+                }
+
+                if (lastPosition > currentPos && currentPos === 0) {
+                    hasStartedPlaying = true;
+                }
+                lastPosition = currentPos;
+
+                const totalPatterns = (modPlayer.player.songlen !== undefined && modPlayer.player.songlen > 0) 
+                    ? modPlayer.player.songlen 
+                    : (modPlayer.player.patterns ? modPlayer.player.patterns.length : 0);
+
+                const safeTotalPatterns = totalPatterns || 1;
+                let displayPos = Math.min(currentPos + 1, safeTotalPatterns);
+                let patternsRemaining = Math.max(0, safeTotalPatterns - displayPos);
+                document.getElementById('winamp-time').textContent = `PAT: ${displayPos}/${safeTotalPatterns || '??'} (-${patternsRemaining})`;
+
+                trackerUpdateTimer++;
+                if (trackerUpdateTimer % 2 === 0) {
+                    try {
+                        const pattNum = modPlayer.currentpattern ? modPlayer.currentpattern() : 0;
+                        const pattLen = modPlayer.currentpattlen ? modPlayer.currentpattlen() : 64;
+                        const rawData = modPlayer.patterndata(pattNum);
+
+                        // --- DETECCIÓN DE PATTERN VACÍO ---
+                        if (userNavigatedDirection > 0 && rawData && rawData.length > 0) {
+                            let elapsedTimeSincePatternStart = performance.now() - patternStartTime;
+                            
+                            if (elapsedTimeSincePatternStart > 3500) {
+                                let isEmptyPattern = true;
+                                for (let i = 0; i < rawData.length; i += 5) {
+                                    if (rawData[i] !== 255 && rawData[i] !== undefined) {
+                                        isEmptyPattern = false;
+                                        break;
+                                    }
+                                }
+
+                                if (isEmptyPattern && modPlayer.player.position !== undefined) {
+                                    if (totalPatterns <= 1 || currentPos + 1 >= totalPatterns) {
+                                        triggerPanicMode();
+                                        playNextSongAutomatic();
+                                        return;
+                                    } else if (currentPos + 1 < totalPatterns) {
+                                        triggerPanicMode();
+                                        modPlayer.player.position = currentPos + 1;
+                                        modPlayer.player.row = 0;
+                                        patternStartTime = performance.now();
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+
+                        renderTrackerTextureToCanvas(currentPos, pattNum, currentRow, pattLen, rawData);
+                    } catch(e) {}
+                }
+
+                let hasAudioSignal = false;
+
+                if (analyser && frequencyData) {
+                    analyser.getByteFrequencyData(frequencyData);
+
+                    let sum = 0;
+                    for (let i = 0; i < frequencyData.length; i++) {
+                        sum += frequencyData[i];
+                    }
+                    let avgVolume = sum / frequencyData.length;
+
+                    if (avgVolume > 0.1) {
+                        hasAudioSignal = true;
+
+                        for (let i = 0; i < numBars; i++) {
+                            let freqVal = frequencyData[i % frequencyData.length] || 0;
+                            let targetScaleY = Math.max(0.2, (freqVal / 256) * fxConfig.alturaBarras);
+                            
+                            bars[i].scale.y += (targetScaleY - bars[i].scale.y) * 0.35;
+                            bars[i].position.y = bars[i].scale.y / 2;
+                        }
+                    }
+                }
+
+                if (!hasAudioSignal) {
+                    for (let i = 0; i < numBars; i++) {
+                        let wave = Math.sin(elapsedTime * 6 + i * 0.3) * 0.5 + 0.5;
+                        let targetScaleY = Math.max(0.2, wave * 2);
+                        bars[i].scale.y += (targetScaleY - bars[i].scale.y) * 0.2;
+                        bars[i].position.y = bars[i].scale.y / 2;
+                    }
+                }
+
+            } else {
+                document.getElementById('winamp-time').textContent = "PAT: 0/0";
+
+                for (let i = 0; i < numBars; i++) {
+                    bars[i].scale.y += (0.1 - bars[i].scale.y) * 0.2;
+                    bars[i].position.y = bars[i].scale.y / 2;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // --- BUCLE DE ANIMACIÓN PRINCIPAL ---
+        animate();
+
+        // --- SALVAVIDAS EN SEGUNDO PLANO (BACKGROUND WATCHDOG) ---
+        // Esto se ejecuta cada segundo aunque estés en otra pestaña, 
+        // asegurando que si una canción termina o se atasca, pase a la siguiente de inmediato.
+        setInterval(() => {
+            if (!isPlaying || !modPlayer || !modPlayer.player) return;
+
+            // 1. Detección de fin de canción en segundo plano
+            if (hasStartedPlaying && modPlayer.player.endofsong === true) {
+                triggerPanicMode();
+                playNextSongAutomatic();
+                return;
+            }
+
+            // 2. Watchdog de canciones congeladas en segundo plano
+            const currentPos = modPlayer.player.position !== undefined ? modPlayer.player.position : 0;
+            const currentRow = modPlayer.player.row !== undefined ? modPlayer.player.row : 0;
+
+            if (currentRow !== lastRow || currentPos !== lastPosition) {
+                playbackWatchdogTimer = performance.now();
+            } else if (performance.now() - playbackWatchdogTimer > 4500) {
+                triggerPanicMode();
+                playNextSongAutomatic();
+                return;
+            }
+            lastRow = currentRow;
+            lastPosition = currentPos;
+
+        }, 1000);
+
+        window.addEventListener('resize', () => {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+    </script>
+</body>
+</html>

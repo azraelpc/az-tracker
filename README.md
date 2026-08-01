@@ -2,6 +2,8 @@
 
 AzTracker 3D is an immersive, web-based tracker music player and 3D visualizer built with Three.js, Web Audio API, and the webaudio-mod-player engine. It renders a futuristic holographic tracker interface alongside a reactive 3D audio spectrum ring and a deep-space starfield.
 
+Demo: https://azraelpc.com/mods/
+
 ---
 
 ## Features
