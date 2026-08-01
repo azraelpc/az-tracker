@@ -1,4 +1,4 @@
-f<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -151,7 +151,66 @@ f<!DOCTYPE html>
         let currentFileName = "";
         let userNavigatedDirection = 1; 
         let patternStartTime = 0; 
-        let playbackWatchdogTimer = 0; // Control de bloqueo por congelación en Row 0
+        let playbackWatchdogTimer = 0;
+
+        // --- TABLA ROBUSTA DE CONVERSIÓN DE NOTAS AMIGA / MOD (PERIODOS) ---
+        // Los motores webAudio-mod-player a veces devuelven frecuencias brutas o índices de periodo de Amiga.
+        // Mapeamos los valores típicos de ProTracker (periodos desde ~856 hasta ~113 o índices directos) a notación estándar.
+        const amigaPeriods = [
+            856, 808, 762, 720, 678, 640, 604, 570, 538, 508, 480, 453, // Octava 1
+            428, 404, 381, 360, 339, 320, 302, 285, 269, 254, 240, 226, // Octava 2
+            214, 202, 190, 180, 170, 160, 151, 143, 135, 127, 120, 113  // Octava 3 y agudas
+        ];
+
+        const noteNamesTable = [
+            "C-1", "C#1", "D-1", "D#1", "E-1", "F-1", "F#1", "G-1", "G#1", "A-1", "A#1", "B-1",
+            "C-2", "C#2", "D-2", "D#2", "E-2", "F-2", "F#2", "G-2", "G#2", "A-2", "A#2", "B-2",
+            "C-3", "C#3", "D-3", "D#3", "E-3", "F-3", "F#3", "G-3", "G#3", "A-3", "A#3", "B-3",
+            "C-4", "C#4", "D-4", "D#4", "E-4", "F-4", "F#4", "G-4", "G#4", "A-4", "A#4", "B-4",
+            "C-5", "C#5", "D-5", "D#5", "E-5", "F-5", "F#5", "G-5", "G#5", "A-5", "A#5", "B-5"
+        ];
+
+        function parseNoteAndColor(noteVal) {
+            if (noteVal === 255 || noteVal === undefined || noteVal < 0 || isNaN(noteVal)) {
+                return { text: "...", color: "#00ffcc" };
+            }
+
+            let noteIndex = -1;
+
+            // 1. Si es un índice directo de nota pequeño (0 a 59)
+            if (noteVal < noteNamesTable.length) {
+                noteIndex = noteVal;
+            } else {
+                // 2. Si es un valor de periodo de Amiga, buscamos el más cercano en nuestra tabla de periodos
+                let minDiff = 99999;
+                for (let i = 0; i < amigaPeriods.length; i++) {
+                    let diff = Math.abs(amigaPeriods[i] - noteVal);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        // Ajustamos offset de octava base para que encaje bien en C-3 / C-4
+                        noteIndex = i + 12; 
+                    }
+                }
+            }
+
+            // Asegurar límites seguros para el array de nombres
+            if (noteIndex < 0) noteIndex = 0;
+            if (noteIndex >= noteNamesTable.length) noteIndex = noteNamesTable.length - 1;
+
+            let noteStr = noteNamesTable[noteIndex];
+
+            // --- CÁLCULO DE COLOR: CUANTO MÁS AGUDA, MÁS ROJA ---
+            // Mapeamos el índice de la nota (de grave a agudo) a un tono HSL donde el agudo tiende a rojo (HUE 0)
+            // y los graves/medios tiran a cian/verde/azul.
+            let ratio = noteIndex / (noteNamesTable.length - 1); // 0.0 (más grave) a 1.0 (más agudo)
+            
+            // Interpolar tono (Hue): 180 (Cian brillante) -> 0 (Rojo puro)
+            let hue = (1 - ratio) * 180; 
+            let lightness = 60 + (ratio * 15); // Un poco más brillantes las agudas
+            let noteColor = `hsl(${hue}, 100%, ${lightness}%)`;
+
+            return { text: noteStr, color: noteColor };
+        }
 
         // --- FUNCIÓN PANIC / SILENCIADOR DE CANALES ---
         function triggerPanicMode() {
@@ -185,7 +244,7 @@ f<!DOCTYPE html>
             if (e.button === 0) {
                 userNavigatedDirection = 1;
                 patternStartTime = performance.now();
-                playbackWatchdogTimer = performance.now(); // Resetear watchdog al interactuar
+                playbackWatchdogTimer = performance.now();
                 if (currentPos + 1 < totalPatterns) {
                     if (typeof modPlayer.setposition === 'function') {
                         modPlayer.setposition(currentPos + 1);
@@ -196,7 +255,7 @@ f<!DOCTYPE html>
             } else if (e.button === 2) {
                 userNavigatedDirection = -1;
                 patternStartTime = performance.now();
-                playbackWatchdogTimer = performance.now(); // Resetear watchdog al interactuar
+                playbackWatchdogTimer = performance.now();
                 if (currentPos > 0) {
                     if (typeof modPlayer.setposition === 'function') {
                         modPlayer.setposition(currentPos - 1);
@@ -337,7 +396,6 @@ f<!DOCTYPE html>
 
             trackerCtx.fillStyle = '#00ffcc';
             trackerCtx.font = 'bold 26px monospace';
-            let displayTitle = currentSongTitle !== "UNKNOWN" && currentSongTitle !== "" ? currentSongTitle : currentFileName;
             trackerCtx.fillText(`· · ·· now playing: ${currentFileName} ·· · ·`, 60, 80);
 
             trackerCtx.font = '20px monospace';
@@ -375,26 +433,23 @@ f<!DOCTYPE html>
                 if (r === row) {
                     trackerCtx.fillStyle = 'rgba(0, 255, 204, 0.4)';
                     trackerCtx.fillRect(45, y - 20, 1190, 34);
-                    trackerCtx.fillStyle = '#ffffff';
                     trackerCtx.shadowBlur = 22;
                 } else {
-                    trackerCtx.fillStyle = '#00ffcc';
                     trackerCtx.shadowBlur = 8;
                 }
 
                 let rowNum = (r < 10 ? '0' + r : r);
+                trackerCtx.fillStyle = '#00ffcc';
                 trackerCtx.fillText(rowNum, startX, y);
 
                 for (let c = 0; c < displayChannels; c++) {
                     const idx = r * (totalChannels * 5) + (c * 5);
                     const note = rawData[idx];
-                    let noteStr = '---';
-                    if (note === 255 || note === undefined) {
-                        noteStr = '...';
-                    } else {
-                        noteStr = note.toString().padStart(3, '0');
-                    }
-                    trackerCtx.fillText(noteStr, startX + 90 + (c * colWidth), y);
+                    
+                    let res = parseNoteAndColor(note);
+                    
+                    trackerCtx.fillStyle = res.color;
+                    trackerCtx.fillText(res.text, startX + 90 + (c * colWidth), y);
                 }
 
                 y += 36;
@@ -422,7 +477,6 @@ f<!DOCTYPE html>
             starMat.size = v;
         });
 
-        // Camera Adjustments Folder
         const fCamera = gui.addFolder('Camera Settings');
         const guiCamX = fCamera.add(fxConfig, 'camX', -50, 50, 1).name('Cam X').onChange(v => camera.position.x = v);
         const guiCamY = fCamera.add(fxConfig, 'camY', -10, 80, 1).name('Cam Y').onChange(v => camera.position.y = v);
@@ -539,7 +593,7 @@ f<!DOCTYPE html>
             currentSongName = "Loading...";
             userNavigatedDirection = 1;
             patternStartTime = performance.now();
-            playbackWatchdogTimer = performance.now(); // Iniciar crono watchdog
+            playbackWatchdogTimer = performance.now();
 
             $('.file-item').removeClass('active');
             playlistItems.forEach(item => {
@@ -574,7 +628,7 @@ f<!DOCTYPE html>
                         lastPosition = -1;
                         lastRow = -1;
                         patternStartTime = performance.now();
-                        playbackWatchdogTimer = performance.now(); // Resetear watchdog al arrancar play
+                        playbackWatchdogTimer = performance.now();
                         
                         if (modPlayer.player.title) {
                             currentSongName = modPlayer.player.title;
@@ -634,7 +688,6 @@ f<!DOCTYPE html>
             }
         };
 
-        // --- Winamp Controls ---
         window.winampPlayPause = function() {
             if (!modPlayer || playlistItems.length === 0) return;
             
@@ -705,7 +758,6 @@ f<!DOCTYPE html>
             containerElement.appendChild(list);
         }
 
-        // --- 3. 3D ANIMATION LOOP & VISUALIZER ---
         const clock = new THREE.Clock();
         let trackerUpdateTimer = 0;
 
@@ -732,7 +784,6 @@ f<!DOCTYPE html>
             trackerMesh.position.y = -2.5 + Math.sin(elapsedTime * 2) * 0.08;
 
             if (isPlaying && modPlayer && modPlayer.player) {
-                // --- DETECCIÓN DE FIN DE CANCIÓN NATIVA ---
                 if (hasStartedPlaying && modPlayer.player.endofsong === true) {
                     triggerPanicMode();
                     playNextSongAutomatic();
@@ -742,13 +793,9 @@ f<!DOCTYPE html>
                 const currentPos = modPlayer.player.position !== undefined ? modPlayer.player.position : 0;
                 const currentRow = modPlayer.player.row !== undefined ? modPlayer.player.row : 0;
 
-                // --- WATCHDOG DE BLOQUEO / ARCHIVO CORRUPTO ---
-                // Si pasan más de 4.5 segundos y la fila (row) o la posición (position) no han cambiado en absoluto,
-                // significa que el motor está congelado intentando leer un archivo corrupto o inválido. Saltamos inmediatamente.
                 if (currentRow !== lastRow || currentPos !== lastPosition) {
-                    playbackWatchdogTimer = performance.now(); // Hay movimiento, reseteamos el watchdog
+                    playbackWatchdogTimer = performance.now();
                 } else if (performance.now() - playbackWatchdogTimer > 4500) {
-                    console.warn("⚠️ Reproductor atascado en Row 0 / Pos congelada. Saltando a la siguiente canción...");
                     triggerPanicMode();
                     playNextSongAutomatic();
                     return;
@@ -790,7 +837,6 @@ f<!DOCTYPE html>
                         const pattLen = modPlayer.currentpattlen ? modPlayer.currentpattlen() : 64;
                         const rawData = modPlayer.patterndata(pattNum);
 
-                        // --- DETECCIÓN DE PATTERN VACÍO ---
                         if (userNavigatedDirection > 0 && rawData && rawData.length > 0) {
                             let elapsedTimeSincePatternStart = performance.now() - patternStartTime;
                             
@@ -868,23 +914,17 @@ f<!DOCTYPE html>
             renderer.render(scene, camera);
         }
 
-        // --- BUCLE DE ANIMACIÓN PRINCIPAL ---
         animate();
 
-        // --- SALVAVIDAS EN SEGUNDO PLANO (BACKGROUND WATCHDOG) ---
-        // Esto se ejecuta cada segundo aunque estés en otra pestaña, 
-        // asegurando que si una canción termina o se atasca, pase a la siguiente de inmediato.
         setInterval(() => {
             if (!isPlaying || !modPlayer || !modPlayer.player) return;
 
-            // 1. Detección de fin de canción en segundo plano
             if (hasStartedPlaying && modPlayer.player.endofsong === true) {
                 triggerPanicMode();
                 playNextSongAutomatic();
                 return;
             }
 
-            // 2. Watchdog de canciones congeladas en segundo plano
             const currentPos = modPlayer.player.position !== undefined ? modPlayer.player.position : 0;
             const currentRow = modPlayer.player.row !== undefined ? modPlayer.player.row : 0;
 
