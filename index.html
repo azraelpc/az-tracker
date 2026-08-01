@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+f<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -94,7 +94,7 @@
 <body>
 
     <div id="ui">
-        <div class="header">AzTracker 3D</div>
+        <div class="header"><center><img src="az-header.png" width=95%></center></div>
         <div id="file-browser">Loading /music library...</div>
         
         <!-- Winamp Control Panel -->
@@ -338,7 +338,7 @@
             trackerCtx.fillStyle = '#00ffcc';
             trackerCtx.font = 'bold 26px monospace';
             let displayTitle = currentSongTitle !== "UNKNOWN" && currentSongTitle !== "" ? currentSongTitle : currentFileName;
-            trackerCtx.fillText(`[ ${displayTitle} ] (${currentFileName})`, 60, 80);
+            trackerCtx.fillText(`[ Playing: ${currentFileName}`, 60, 80);
 
             trackerCtx.font = '20px monospace';
             trackerCtx.fillStyle = '#00ffcc';
