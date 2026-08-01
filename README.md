@@ -1,4 +1,4 @@
-# AzTracker 3D - Holographic Pattern Edition
+# AzTracker 3D - Web Mod Player - Holographic Edition
 
 AzTracker 3D is an immersive, web-based tracker music player and 3D visualizer built with Three.js, Web Audio API, and the webaudio-mod-player engine. It renders a futuristic holographic tracker interface alongside a reactive 3D audio spectrum ring and a deep-space starfield.
 
@@ -10,8 +10,8 @@ Demo: https://azraelpc.com/mods/
 
 ## Features
 
-* Holographic 3D Tracker Matrix: Real-time rendering of tracker rows, notes, and channels mapped onto a 3D perspective plane in Three.js.
-* Multi-Format Tracker Support: Powered by dedicated engines for classic module formats (.MOD, .S3M, .FT2).
+* Holographic 3D Web Mod Player: Real-time rendering of tracker rows, notes, and channels mapped onto a 3D perspective plane in Three.js.
+* Multi-Format Tracker Support: Powered by dedicated engines for classic module formats (.MOD, .S3M, .XM, etc).
 * Interactive Pattern Navigation: 
   * Left Click on the pattern display to skip forward.
   * Right Click to jump backward.
@@ -28,7 +28,7 @@ Demo: https://azraelpc.com/mods/
 
 * Frontend Framework: Vanilla JavaScript, HTML5, CSS3, jQuery 1.9.0
 * 3D Graphics & Rendering: Three.js (r128) with OrbitControls
-* Audio Engine: Custom Web Audio mod player (webaudio-mod-player engine for ProTracker, ScreamTracker, and FastTracker 2)
+* Audio Engine: Web Audio Mod Player (webaudio-mod-player engine for ProTracker, ScreamTracker, and FastTracker 2)
 * UI Controls: lil-gui
 
 ---
