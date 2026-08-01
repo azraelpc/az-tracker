@@ -828,7 +828,7 @@
                 const safeTotalPatterns = totalPatterns || 1;
                 let displayPos = Math.min(currentPos + 1, safeTotalPatterns);
                 let patternsRemaining = Math.max(0, safeTotalPatterns - displayPos);
-                document.getElementById('winamp-time').textContent = `PAT: ${displayPos}/${safeTotalPatterns || '??'} (-${patternsRemaining})`;
+                document.getElementById('winamp-time').textContent = `POS: ${displayPos}/${safeTotalPatterns || '??'} (-${patternsRemaining})`;
 
                 trackerUpdateTimer++;
                 if (trackerUpdateTimer % 2 === 0) {
@@ -903,7 +903,7 @@
                 }
 
             } else {
-                document.getElementById('winamp-time').textContent = "PAT: 0/0";
+                document.getElementById('winamp-time').textContent = "POS: 0/0";
 
                 for (let i = 0; i < numBars; i++) {
                     bars[i].scale.y += (0.1 - bars[i].scale.y) * 0.2;
